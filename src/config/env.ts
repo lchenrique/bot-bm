@@ -1,44 +1,19 @@
-import { config } from 'dotenv';
+import { z } from 'zod';
+import 'dotenv/config';
 
-config();
+const envSchema = z.object({
+  PORT: z.string(),
+  NODE_ENV: z.string(),
+  TELEGRAM_BOT_TOKEN: z.string(),
+  BOT_TOKEN: z.string(),
+  ADMIN_CHAT_ID: z.string(),
+  TARGET_URL: z.string(),
+  MONITOR_LOGIN: z.string(),
+  MONITOR_PASSWORD: z.string(),
+  BOT_PASSWORD: z.string(),
+  GOOGLE_API_KEY: z.string(),
+});
 
-interface EnvConfig {
-  TELEGRAM_BOT_TOKEN: string;
-  GOOGLE_API_KEY: string;
-  TARGET_URL: string;
-  PORT: number;
-  NODE_ENV: 'development' | 'production' | 'test';
-  BOT_PASSWORD: string;
-  MONITOR_LOGIN: string;
-  MONITOR_PASSWORD: string;
-}
+export type EnvConfig = z.infer<typeof envSchema>;
 
-function validateEnv(): EnvConfig {
-  const requiredEnvVars = [
-    'TELEGRAM_BOT_TOKEN',
-    'GOOGLE_API_KEY',
-    'TARGET_URL',
-    'BOT_PASSWORD',
-    'MONITOR_LOGIN',
-    'MONITOR_PASSWORD'
-  ];
-
-  for (const envVar of requiredEnvVars) {
-    if (!process.env[envVar]) {
-      throw new Error(`Missing required environment variable: ${envVar}`);
-    }
-  }
-
-  return {
-    TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN!,
-    GOOGLE_API_KEY: process.env.GOOGLE_API_KEY!,
-    TARGET_URL: process.env.TARGET_URL!,
-    PORT: parseInt(process.env.PORT || '3000', 10),
-    NODE_ENV: (process.env.NODE_ENV || 'development') as EnvConfig['NODE_ENV'],
-    BOT_PASSWORD: process.env.BOT_PASSWORD!,
-    MONITOR_LOGIN: process.env.MONITOR_LOGIN!,
-    MONITOR_PASSWORD: process.env.MONITOR_PASSWORD!
-  };
-}
-
-export const env = validateEnv();
+export const env = envSchema.parse(process.env);
