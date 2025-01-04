@@ -7,6 +7,18 @@ import { monitorService } from './services/monitor.service';
 import path from 'path';
 import fs from 'fs';
 
+function formatDateBR(date: Date): string {
+  return date.toLocaleString('pt-BR', { 
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
 async function main() {
   const server = fastify({
     logger: {
@@ -35,14 +47,14 @@ async function main() {
 
     // Health check route
     server.get('/health', async () => {
-      return { status: 'ok', timestamp: new Date().toISOString() };
+      return { status: 'ok', timestamp: formatDateBR(new Date()) };
     });
 
     // Rota de teste para enviar notificação
     server.get('/test-notification', async (request, reply) => {
       try {
         console.log('Rota /test-notification chamada');
-        const currentTime = new Date().toLocaleString('pt-BR');
+        const currentTime = formatDateBR(new Date());
         await notificationService.sendNotification(
           `🔔 Teste de notificação!\n\n` +
           `Se você recebeu esta mensagem, o bot está funcionando corretamente.\n\n` +
@@ -66,7 +78,7 @@ async function main() {
     // Rota para simular uma mudança na página
     server.get('/simulate-change', async () => {
       const filePath = path.join(process.cwd(), 'public', 'test-page.html');
-      const currentTime = new Date().toLocaleString('pt-BR');
+      const currentTime = formatDateBR(new Date());
       const newContent = `<!DOCTYPE html>
 <html>
 <head>
