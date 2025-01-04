@@ -21,7 +21,86 @@ export class NotificationService {
   private bot: TelegramBot;
 
   constructor() {
-    this.bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN);
+    this.bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN, { polling: true });
+    this.setupCommands();
+  }
+
+  private setupCommands() {
+    // Comando /start
+    this.bot.onText(/\/start/, async (msg) => {
+      const chatId = msg.chat.id;
+      if (chatId.toString() !== env.ADMIN_CHAT_ID) {
+        await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
+        return;
+      }
+      await this.bot.sendMessage(chatId, 
+        '🤖 Bot de Monitoramento iniciado!\n\n' +
+        'Comandos disponíveis:\n' +
+        '/status - Verifica o status atual do monitoramento\n' +
+        '/check - Força uma verificação imediata\n' +
+        '/help - Mostra esta mensagem de ajuda'
+      );
+    });
+
+    // Comando /status
+    this.bot.onText(/\/status/, async (msg) => {
+      const chatId = msg.chat.id;
+      if (chatId.toString() !== env.ADMIN_CHAT_ID) {
+        await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
+        return;
+      }
+      await this.sendStatus('Status solicitado manualmente');
+    });
+
+    // Comando /check
+    this.bot.onText(/\/check/, async (msg) => {
+      const chatId = msg.chat.id;
+      if (chatId.toString() !== env.ADMIN_CHAT_ID) {
+        await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
+        return;
+      }
+      await this.bot.sendMessage(chatId, '🔍 Iniciando verificação manual...');
+      try {
+        // Garante que o navegador está inicializado
+        if (!await monitorService.initialize()) {
+          throw new Error('Falha ao inicializar o navegador');
+        }
+        
+        // Verifica Niterói (16)
+        monitorService['_currentConvenio'] = '16';
+        const result16 = await monitorService['processConvenio']();
+        
+        // Verifica Maricá (18)
+        monitorService['_currentConvenio'] = '18';
+        const result18 = await monitorService['processConvenio']();
+        
+        let message = '✅ Verificação manual concluída!\n\n';
+        message += `📍 Niterói: ${result16?.hasUpdates ? '🟢 Serviço disponível!' : '🔴 Nenhuma desistência'}\n`;
+        message += `📍 Maricá: ${result18?.hasUpdates ? '🟢 Serviço disponível!' : '🔴 Nenhuma desistência'}`;
+        
+        await this.bot.sendMessage(chatId, message);
+      } catch (error) {
+        await this.bot.sendMessage(chatId, '❌ Erro ao realizar verificação manual: ' + error);
+      }
+    });
+
+    // Comando /help
+    this.bot.onText(/\/help/, async (msg) => {
+      const chatId = msg.chat.id;
+      if (chatId.toString() !== env.ADMIN_CHAT_ID) {
+        await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
+        return;
+      }
+      await this.bot.sendMessage(chatId,
+        '🤖 *Bot de Monitoramento - Ajuda*\n\n' +
+        'Comandos disponíveis:\n\n' +
+        '📊 /status - Verifica o status atual do monitoramento\n' +
+        '🔍 /check - Força uma verificação imediata\n' +
+        '❓ /help - Mostra esta mensagem de ajuda\n\n' +
+        '_O bot notificará automaticamente quando houver atualizações._',
+        { parse_mode: 'Markdown' }
+      );
+    });
   }
 
   async sendNotification(message: string, image?: Buffer) {
