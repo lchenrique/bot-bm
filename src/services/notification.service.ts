@@ -186,6 +186,7 @@ export class NotificationService {
     const message = `📊 *Status do Monitoramento*\n\n` +
                    `🤖 Estado: ${monitorService.isRunning ? 'Rodando' : 'Parado'}\n` +
                    `🕒 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
+                   `📝 Último local: ${monitorService.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n` +
                    `📝 ${status}\n\n` +
                    `_O sistema verifica automaticamente tanto Niterói quanto Maricá._`;
 
