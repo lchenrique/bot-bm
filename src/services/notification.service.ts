@@ -199,7 +199,7 @@ export class NotificationService {
       const chatId = msg.chat.id.toString();
       if (!await checkAuth(chatId)) return;
 
-      await this.sendStatus('📊 Status do Monitoramento');
+      await this.sendStatus('📊 Status do Monitoramento', chatId);
     });
 
     // Comando para iniciar monitoramento
@@ -284,14 +284,14 @@ export class NotificationService {
     }
   }
 
-  async sendStatus(status: string) {
+  async sendStatus(status: string, chatId: string) {
     const message = `📊 *Status do Monitoramento*\n\n` +
                    `🤖 Estado: ${monitorService.isRunning ? 'Rodando' : 'Parado'}\n` +
                    `🕒 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
                    `📝 Último local: ${monitorService.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n\n` +
                    `_O sistema verifica automaticamente tanto Niterói quanto Maricá._`;
 
-    await this.bot.sendMessage(env.ADMIN_CHAT_ID, message, { parse_mode: 'Markdown' });
+    await this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
   }
 }
 
