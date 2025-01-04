@@ -319,7 +319,7 @@ export class MonitorService {
                 await notificationService.sendNotification(
                     `🚨 NOVO SERVIÇO DISPONÍVEL!\n\n` +
                     `Encontrado serviço em ${result.city}\n` +
-                    `⏰ ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\n\n` +
+                    `⏰ ${formatDateBR(new Date())}\n\n` +
                     `Acesse: ${env.TARGET_URL}`
                 );
             }

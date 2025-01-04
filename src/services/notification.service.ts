@@ -199,7 +199,7 @@ export class NotificationService {
       const chatId = msg.chat.id.toString();
       if (!await checkAuth(chatId)) return;
 
-      await this.sendStatus('Status solicitado manualmente');
+      await this.sendStatus('📊 Status do Monitoramento');
     });
 
     // Comando para iniciar monitoramento
