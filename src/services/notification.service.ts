@@ -33,17 +33,32 @@ export class NotificationService {
         await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
         return;
       }
+
+      const keyboard: TelegramBot.SendMessageOptions = {
+        reply_markup: {
+          keyboard: [
+            [{ text: '▶️ Iniciar monitoramento' }, { text: '🛑 Parar monitoramento' }],
+            [{ text: '📊 Status' }, { text: '🔍 Verificar agora' }],
+            [{ text: '⚙️ Configurações' }, { text: '❓ Ajuda' }]
+          ],
+          resize_keyboard: true
+        }
+      };
+
       await this.bot.sendMessage(chatId, 
         '🤖 Bot de Monitoramento iniciado!\n\n' +
-        'Comandos disponíveis:\n' +
-        '/status - Verifica o status atual do monitoramento\n' +
-        '/check - Força uma verificação imediata\n' +
-        '/help - Mostra esta mensagem de ajuda'
+        'Use o menu abaixo ou os comandos:\n' +
+        '/start - Inicia o monitoramento\n' +
+        '/stop - Para o monitoramento\n' +
+        '/status - Verifica o status atual\n' +
+        '/check - Força uma verificação\n' +
+        '/help - Mostra ajuda completa',
+        keyboard
       );
     });
 
-    // Comando /status
-    this.bot.onText(/\/status/, async (msg) => {
+    // Comando /status e botão Status
+    this.bot.onText(/\/status|📊 Status/, async (msg) => {
       const chatId = msg.chat.id;
       if (chatId.toString() !== env.ADMIN_CHAT_ID) {
         await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
@@ -52,8 +67,8 @@ export class NotificationService {
       await this.sendStatus('Status solicitado manualmente');
     });
 
-    // Comando /check
-    this.bot.onText(/\/check/, async (msg) => {
+    // Comando /check e botão Verificar agora
+    this.bot.onText(/\/check|🔍 Verificar agora/, async (msg) => {
       const chatId = msg.chat.id;
       if (chatId.toString() !== env.ADMIN_CHAT_ID) {
         await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
@@ -84,8 +99,54 @@ export class NotificationService {
       }
     });
 
-    // Comando /help
-    this.bot.onText(/\/help/, async (msg) => {
+    // Botão Configurações
+    this.bot.onText(/⚙️ Configurações/, async (msg) => {
+      const chatId = msg.chat.id;
+      if (chatId.toString() !== env.ADMIN_CHAT_ID) {
+        await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
+        return;
+      }
+      await this.bot.sendMessage(chatId,
+        '⚙️ *Configurações*\n\n' +
+        `🏢 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
+        `📝 Último status: ${monitorService.lastStatus || 'Nenhum'}`,
+        { parse_mode: 'Markdown' }
+      );
+    });
+
+    // Comando /start e botão Iniciar monitoramento
+    this.bot.onText(/\/start|▶️ Iniciar monitoramento/, async (msg) => {
+      const chatId = msg.chat.id;
+      if (chatId.toString() !== env.ADMIN_CHAT_ID) {
+        await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
+        return;
+      }
+      if (monitorService.isRunning) {
+        await this.bot.sendMessage(chatId, '⚠️ O monitoramento já está em execução!');
+        return;
+      }
+      await monitorService.initialize();
+      await monitorService.startMonitoring();
+      await this.bot.sendMessage(chatId, '▶️ Monitoramento iniciado com sucesso!');
+    });
+
+    // Comando /stop e botão Parar monitoramento
+    this.bot.onText(/\/stop|🛑 Parar monitoramento/, async (msg) => {
+      const chatId = msg.chat.id;
+      if (chatId.toString() !== env.ADMIN_CHAT_ID) {
+        await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
+        return;
+      }
+      if (!monitorService.isRunning) {
+        await this.bot.sendMessage(chatId, '⚠️ O monitoramento já está parado!');
+        return;
+      }
+      await monitorService.stopMonitoring();
+      await this.bot.sendMessage(chatId, '🛑 Monitoramento parado com sucesso!');
+    });
+
+    // Comando /help e botão Ajuda
+    this.bot.onText(/\/help|❓ Ajuda/, async (msg) => {
       const chatId = msg.chat.id;
       if (chatId.toString() !== env.ADMIN_CHAT_ID) {
         await this.bot.sendMessage(chatId, '⚠️ Desculpe, você não tem permissão para usar este bot.');
@@ -94,10 +155,14 @@ export class NotificationService {
       await this.bot.sendMessage(chatId,
         '🤖 *Bot de Monitoramento - Ajuda*\n\n' +
         'Comandos disponíveis:\n\n' +
-        '📊 /status - Verifica o status atual do monitoramento\n' +
-        '🔍 /check - Força uma verificação imediata\n' +
-        '❓ /help - Mostra esta mensagem de ajuda\n\n' +
-        '_O bot notificará automaticamente quando houver atualizações._',
+        '▶️ Iniciar monitoramento - Inicia o monitoramento automático\n' +
+        '🛑 Parar monitoramento - Para o monitoramento\n' +
+        '📊 Status - Verifica o status atual do monitoramento\n' +
+        '🔍 Verificar agora - Força uma verificação imediata\n' +
+        '⚙️ Configurações - Mostra configurações atuais\n' +
+        '❓ Ajuda - Mostra esta mensagem de ajuda\n\n' +
+        '_O bot notificará automaticamente quando houver atualizações._\n\n' +
+        '*Nota:* O sistema verifica automaticamente tanto Niterói quanto Maricá.',
         { parse_mode: 'Markdown' }
       );
     });
@@ -119,11 +184,12 @@ export class NotificationService {
 
   async sendStatus(status: string) {
     const message = `📊 *Status do Monitoramento*\n\n` +
-                   `🤖 Estado: Rodando\n` +
-                   `🕒 Última verificação: ${formatDateBR(new Date())}\n` +
-                   `📝 ${status}`;
+                   `🤖 Estado: ${monitorService.isRunning ? 'Rodando' : 'Parado'}\n` +
+                   `🕒 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
+                   `📝 ${status}\n\n` +
+                   `_O sistema verifica automaticamente tanto Niterói quanto Maricá._`;
 
-    await this.sendNotification(message);
+    await this.bot.sendMessage(env.ADMIN_CHAT_ID, message, { parse_mode: 'Markdown' });
   }
 }
 
