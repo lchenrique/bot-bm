@@ -4,6 +4,7 @@ import { createLogger, format, transports } from 'winston';
 import { notificationService } from './notification.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { StatusService } from './status.service';
 
 const logger = createLogger({
     level: 'info',
@@ -17,11 +18,29 @@ const logger = createLogger({
     ]
 });
 
+// Função para formatar a data no timezone de Brasília
+function formatDateBR(date: Date): string {
+  return date.toLocaleString('pt-BR', { 
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
 export class MonitorService {
     private browser: Browser | null = null;
     private page: Page | null = null;
     private readonly COOKIES_FILE = 'cookies.json';
     private _currentConvenio: '16' | '18' = '16';
+    private statusService: StatusService;
+
+    constructor() {
+        this.statusService = new StatusService();
+    }
 
     async initialize() {
         try {
@@ -105,7 +124,7 @@ export class MonitorService {
                         await notificationService.sendNotification(
                             `🚨 NOVO SERVIÇO DISPONÍVEL!\n\n` +
                             `Encontrado serviço em ${result.city}\n` +
-                            `⏰ ${new Date().toLocaleString('pt-BR')}\n\n` +
+                            `⏰ ${formatDateBR(new Date())}\n\n` +
                             `Acesse: ${env.TARGET_URL}`,
                             await this.page!.screenshot()
                         );
@@ -287,6 +306,29 @@ export class MonitorService {
         // Mantém o navegador aberto para inspeção
         // this.browser = null;
         // this.page = null;
+    }
+
+    async monitorServices() {
+        try {
+            this.statusService.incrementChecks();
+            const result = await this.processConvenio();
+            
+            if (result?.hasUpdates) {
+                this.statusService.incrementServicesFound();
+                await notificationService.sendNotification(
+                    `🚨 NOVO SERVIÇO DISPONÍVEL!\n\n` +
+                    `Encontrado serviço em ${result.city}\n` +
+                    `⏰ ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\n\n` +
+                    `Acesse: ${env.TARGET_URL}`
+                );
+            }
+        } catch (error) {
+            console.error('Erro ao monitorar serviços:', error);
+        }
+    }
+
+    getStatus(): string {
+        return this.statusService.getStatus();
     }
 }
 
