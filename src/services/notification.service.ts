@@ -288,8 +288,7 @@ export class NotificationService {
     const message = `📊 *Status do Monitoramento*\n\n` +
                    `🤖 Estado: ${monitorService.isRunning ? 'Rodando' : 'Parado'}\n` +
                    `🕒 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
-                   `📝 Último local: ${monitorService.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n` +
-                   `📝 ${status}\n\n` +
+                   `📝 Último local: ${monitorService.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n\n` +
                    `_O sistema verifica automaticamente tanto Niterói quanto Maricá._`;
 
     await this.bot.sendMessage(env.ADMIN_CHAT_ID, message, { parse_mode: 'Markdown' });
