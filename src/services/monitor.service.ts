@@ -77,8 +77,9 @@ export class MonitorService {
         return this._isRunning;
     }
 
-    get lastCheck(): Date | null {
-        return this._lastCheck;
+    get lastCheck(): string | null {
+        if (!this._lastCheck) return null;
+        return formatDateBR(this._lastCheck);
     }
 
     get lastStatus(): string | null {
