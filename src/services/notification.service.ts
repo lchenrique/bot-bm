@@ -21,7 +21,7 @@ export class NotificationService {
   private bot: TelegramBot;
 
   constructor() {
-    this.bot = new TelegramBot(env.BOT_TOKEN);
+    this.bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN);
   }
 
   async sendNotification(message: string, image?: Buffer) {

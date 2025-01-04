@@ -5,7 +5,6 @@ const envSchema = z.object({
   PORT: z.string(),
   NODE_ENV: z.string(),
   TELEGRAM_BOT_TOKEN: z.string(),
-  BOT_TOKEN: z.string(),
   ADMIN_CHAT_ID: z.string(),
   TARGET_URL: z.string(),
   MONITOR_LOGIN: z.string(),
