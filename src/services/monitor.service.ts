@@ -31,12 +31,97 @@ function formatDateBR(date: Date): string {
   });
 }
 
+// Array de chaves do Gemini e controle de taxa
+const GEMINI_API_KEYS = [
+    env.GOOGLE_API_KEY,
+    env.GOOGLE_API_KEY_BACKUP
+].filter(Boolean);
+
+let currentKeyIndex = 0;
+let requestsInLastMinute = 0;
+let requestsToday = 0;
+let lastRequestTime = new Date();
+let dayStartTime = new Date();
+
+// Controle de taxa por chave
+interface RateLimit {
+    requestsInLastMinute: number;
+    requestsToday: number;
+    lastRequestTime: Date;
+    dayStartTime: Date;
+    isExhausted: boolean;
+}
+
+const rateLimits: { [key: string]: RateLimit } = {};
+
+// Inicializa limites para cada chave
+GEMINI_API_KEYS.forEach(key => {
+    rateLimits[key] = {
+        requestsInLastMinute: 0,
+        requestsToday: 0,
+        lastRequestTime: new Date(),
+        dayStartTime: new Date(),
+        isExhausted: false
+    };
+});
+
+// Função para obter próxima chave disponível do pool
+const getNextApiKey = (): string | null => {
+    const availableKeys = GEMINI_API_KEYS.filter(key => !rateLimits[key].isExhausted);
+    if (availableKeys.length === 0) {
+        return null;
+    }
+    currentKeyIndex = (currentKeyIndex + 1) % availableKeys.length;
+    return availableKeys[currentKeyIndex];
+};
+
+// Função para verificar limites de taxa por chave
+const checkRateLimits = async (apiKey: string): Promise<boolean> => {
+    const limits = rateLimits[apiKey];
+    const now = new Date();
+    
+    // Reset contadores diários à meia-noite
+    if (now.getDate() !== limits.dayStartTime.getDate()) {
+        limits.requestsToday = 0;
+        limits.dayStartTime = now;
+        limits.isExhausted = false;
+    }
+
+    // Reset contador de minuto
+    if (now.getTime() - limits.lastRequestTime.getTime() >= 60000) {
+        limits.requestsInLastMinute = 0;
+        limits.lastRequestTime = now;
+    }
+
+    // Verifica limites
+    if (limits.requestsInLastMinute >= 15) {
+        console.log(`⏳ Chave ${apiKey.substring(0, 5)}... atingiu limite por minuto`);
+        await new Promise(resolve => setTimeout(resolve, 60000));
+        return checkRateLimits(apiKey);
+    }
+
+    if (limits.requestsToday >= 1500) {
+        console.log(`⚠️ Chave ${apiKey.substring(0, 5)}... atingiu limite diário`);
+        limits.isExhausted = true;
+        return false;
+    }
+
+    limits.requestsInLastMinute++;
+    limits.requestsToday++;
+    return true;
+};
+
 export class MonitorService {
     private browser: Browser | null = null;
     private page: Page | null = null;
     private readonly COOKIES_FILE = 'cookies.json';
     private _currentConvenio: '16' | '18' = '16';
     private statusService: StatusService;
+    private lastUsedKey: string | null = null;
+    private keyUsageCount: { [key: string]: number } = {
+        [env.GOOGLE_API_KEY]: 0,
+        [env.GOOGLE_API_KEY_BACKUP]: 0
+    };
 
     constructor() {
         this.statusService = new StatusService();
@@ -45,7 +130,7 @@ export class MonitorService {
     async initialize() {
         try {
             this.browser = await chromium.launch({ 
-                headless: true,
+                headless: false,
                 args: ['--no-sandbox', '--disable-setuid-sandbox']
             });
             const context = await this.browser.newContext({
@@ -109,19 +194,20 @@ export class MonitorService {
 
                     // Verifica cookies e faz login se necessário
                     if (!await this.checkCookiesAndLogin()) {
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+                        await new Promise(resolve => setTimeout(resolve, 3000));
                         continue;
                     }
 
                     // Navega para serviços vagos
                     await this.navigateToServices();
 
-            // Processa convênio atual
-            this._lastCheck = new Date();
-            const result = await this.processConvenio();
-            
-            if (result?.hasUpdates) {
-                this._lastStatus = `Novo serviço disponível em ${result.city}`;
+                    // Processa convênio atual
+                    this._lastCheck = new Date();
+                    console.log(`🔄 Verificando convênio ${this._currentConvenio} (${this._currentConvenio === '16' ? 'Niterói' : 'Maricá'})...`);
+                    const result = await this.processConvenio();
+                    
+                    if (result?.hasUpdates) {
+                        this._lastStatus = `Novo serviço disponível em ${result.city}`;
                         await notificationService.sendNotification(
                             `🚨 NOVO SERVIÇO DISPONÍVEL!\n\n` +
                             `Encontrado serviço em ${result.city}\n` +
@@ -129,10 +215,14 @@ export class MonitorService {
                             `Acesse: ${env.TARGET_URL}`,
                             await this.page!.screenshot()
                         );
+                    } else if (result === null) {
+                        console.log('⚠️ Erro ao processar convênio, tentando novamente...');
+                        continue; // Mantém o mesmo convênio para nova tentativa
                     }
 
                     // Alterna convênio para próxima iteração
                     this._currentConvenio = this._currentConvenio === '16' ? '18' : '16';
+                    console.log(`✅ Alternando para convênio ${this._currentConvenio} (${this._currentConvenio === '16' ? 'Niterói' : 'Maricá'})`);
                     
                     await new Promise(resolve => setTimeout(resolve, 2000));
                 } catch (error) {
@@ -159,39 +249,49 @@ export class MonitorService {
                 return true;
             }
 
-            // Verifica se há mensagem de código incorreto
+            // Se não achou o link, verifica se tem mensagem de código incorreto
             const content = await this.page!.content();
-            if (content.includes('Código incorreto.')) {
+            if (content.includes('Código incorreto')) {
+                console.log('⚠️ Código incorreto detectado, recarregando página...');
                 await this.page!.reload();
                 await this.page!.waitForTimeout(1000);
                 return false;
             }
 
+            console.log('🔐 Iniciando processo de login...');
+            
             // Faz login
             await this.page!.fill('#modlgn_username', env.MONITOR_LOGIN);
             await this.page!.fill('#modlgn_passwd', env.MONITOR_PASSWORD);
 
             // Resolve captcha
             const captchaText = await this.solveCaptcha();
+            console.log('✍️ Preenchendo captcha:', captchaText);
             await this.page!.fill('input[name="cd"]', captchaText);
             
-            // Submete formulário
+            console.log('🔄 Enviando formulário...');
             await this.page!.click('input[type="submit"]');
-            await this.page!.waitForTimeout(500);
+            await this.page!.waitForTimeout(1000);
 
             // Verifica se login foi bem sucedido
             const loggedIn = await this.page!.$('a[href="/index.php?option=com_servicos_vagos&Itemid=155"]');
             if (!loggedIn) {
-                throw new Error('Login falhou');
+                console.log('❌ Login falhou, verificando erro...');
+                const newContent = await this.page!.content();
+                if (newContent.includes('Código incorreto')) {
+                    console.log('❌ Captcha incorreto');
+                    return false;
+                }
+                throw new Error('Login falhou por motivo desconhecido');
             }
 
-            // Salva cookies
+            console.log('✅ Login bem sucedido, salvando cookies...');
             const cookies = await this.page!.context().cookies();
             await this.saveCookies(cookies);
 
             return true;
         } catch (error) {
-            logger.error('Erro no login', { error });
+            console.error('❌ Erro no processo de login:', error);
             return false;
         }
     }
@@ -201,14 +301,90 @@ export class MonitorService {
         await this.page!.waitForTimeout(1000);
     }
 
+    private async getCaptchaText(): Promise<string> {
+        console.log('🔍 Procurando elemento do captcha...');
+        const captchaElement = await this.page!.$('img[src="/captcha2.php"]');
+        if (!captchaElement) {
+            throw new Error('Captcha não encontrado');
+        }
+
+        console.log('📸 Capturando screenshot do captcha...');
+        const imageBuffer = await captchaElement.screenshot();
+        
+        // Escolhe a chave com menos uso
+        const key = this.lastUsedKey === env.GOOGLE_API_KEY ? 
+                   env.GOOGLE_API_KEY_BACKUP : 
+                   env.GOOGLE_API_KEY;
+        
+        this.lastUsedKey = key;
+        this.keyUsageCount[key]++;
+
+        console.log(`🔄 Usando chave ${key === env.GOOGLE_API_KEY ? '1' : '2'} (${this.keyUsageCount[key]} usos)`);
+        
+        // Adiciona delay proporcional ao uso da chave
+        const delay = Math.min(this.keyUsageCount[key] * 500, 5000);
+        if (delay > 0) {
+            console.log(`⏳ Aguardando ${delay}ms antes da próxima requisição...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        try {
+            const { GoogleGenerativeAI } = await import('@google/generative-ai');
+            const genAI = new GoogleGenerativeAI(key);
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+            const result = await model.generateContent([
+                "Leia o texto do CAPTCHA nesta imagem. " +
+                "O texto tem 4 caracteres em preto. " +
+                "IMPORTANTE: " +
+                "- Se ver um '0' (zero) com uma linha atravessada, é um zero. " +
+                "- Mantenha maiúsculas e minúsculas exatamente como aparecem. " +
+                "- Ignore linhas coloridas e outros ruídos. " +
+                "Responda APENAS os 4 caracteres, sem nenhuma explicação.",
+                {
+                    inlineData: { 
+                        data: imageBuffer.toString('base64'), 
+                        mimeType: 'image/png' 
+                    }
+                }
+            ]);
+
+            const captchaText = result.response.text().trim();
+            console.log('✅ Captcha resolvido:', captchaText);
+
+            // Reset contador se sucesso
+            if (this.keyUsageCount[key] > 10) {
+                this.keyUsageCount[key] = 0;
+            }
+
+            return captchaText;
+
+        } catch (error: any) {
+            console.error('❌ Erro ao resolver captcha:', error.message);
+            
+            // Se for erro de limite, aumenta o delay na próxima vez
+            if (error.message.includes('429') || error.message.includes('quota')) {
+                const key = this.lastUsedKey!;
+                this.keyUsageCount[key] += 5; // Aumenta o contador para forçar mais delay
+                console.log(`⚠️ Limite atingido na chave ${key === env.GOOGLE_API_KEY ? '1' : '2'}, aumentando delay`);
+            }
+
+            throw error;
+        }
+    }
+
+    private async solveCaptcha(): Promise<string> {
+        return this.getCaptchaText();
+    }
+
     private async processConvenio(): Promise<{ hasUpdates: boolean; city: string } | null> {
         try {
             // Seleciona convênio
             await this.page!.selectOption('select#convenio', this.currentConvenio);
             await this.page!.waitForTimeout(1000);
 
-            // Resolve captcha
-            const captchaText = await this.solveCaptcha();
+            // Resolve captcha usando o mesmo método com controle de taxa
+            const captchaText = await this.getCaptchaText();
             await this.page!.fill('input[name="cd"]', captchaText);
             
             // Submete formulário
@@ -249,39 +425,6 @@ export class MonitorService {
             logger.error('Erro ao processar convênio', { error });
             return null;
         }
-    }
-
-    private async solveCaptcha(): Promise<string> {
-        const captchaElement = await this.page!.$('img[src="/captcha2.php"]');
-        if (!captchaElement) {
-            throw new Error('Captcha não encontrado');
-        }
-
-        const imageBuffer = await captchaElement.screenshot();
-        const { GoogleGenerativeAI } = await import('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(env.GOOGLE_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-            const result = await model.generateContent([
-                "Analise esta imagem de CAPTCHA. Extraia APENAS os caracteres em preto, mantendo EXATAMENTE o mesmo caso (maiúsculo/minúsculo). " +
-                "IMPORTANTE: Se aparecer um '0' (zero) com um risco, é realmente um '0' (zero). " +
-                "Ignore qualquer ruído ou linha. " +
-                "Retorne APENAS os caracteres, sem explicações ou pontuação. " +
-                "NÃO converta para maiúsculo, mantenha exatamente como está na imagem.",
-                {
-                    inlineData: { 
-                        data: imageBuffer.toString('base64'), 
-                        mimeType: 'image/png' 
-                    }
-                }
-            ]);
-
-        const captchaText = (await result.response).text().trim();
-        if (!captchaText || captchaText.length < 4) {
-            throw new Error('Captcha inválido');
-        }
-
-        return captchaText;
     }
 
     private async saveCookies(cookies: any[]) {

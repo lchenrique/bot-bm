@@ -23,6 +23,7 @@ export class NotificationService {
   private notificationsEnabled = true;
   private authorizedChats: Set<string>;
   private pendingAuth: Map<string, number>;
+  private serviceActive = true;
 
   constructor() {
     this.bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN, { polling: true });
@@ -285,6 +286,11 @@ export class NotificationService {
   }
 
   async sendStatus(status: string, chatId: string) {
+    if (!this.serviceActive) {
+        await this.bot.sendMessage(chatId, '⚠️ Serviço está temporariamente indisponível');
+        return;
+    }
+
     const message = `📊 *Status do Monitoramento*\n\n` +
                    `🤖 Estado: ${monitorService.isRunning ? 'Rodando' : 'Parado'}\n` +
                    `🕒 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
@@ -292,6 +298,10 @@ export class NotificationService {
                    `_O sistema verifica automaticamente tanto Niterói quanto Maricá._`;
 
     await this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+  }
+
+  setServiceActive(active: boolean) {
+    this.serviceActive = active;
   }
 }
 
