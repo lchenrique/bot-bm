@@ -326,15 +326,13 @@ export class MonitorService {
         console.log('📸 Capturando screenshot do captcha...');
         const imageBuffer = await captchaElement.screenshot();
         
-        // Escolhe a próxima chave disponível
-        const currentIndex = GEMINI_API_KEYS.indexOf(this.lastUsedKey || GEMINI_API_KEYS[0]);
-        const nextIndex = (currentIndex + 1) % GEMINI_API_KEYS.length;
-        const key = GEMINI_API_KEYS[nextIndex];
+        // Usa a última chave que funcionou ou a primeira se não houver
+        const key = this.lastUsedKey || GEMINI_API_KEYS[0];
         
-        this.lastUsedKey = key;
+        // Incrementa o uso da chave
         this.keyUsageCount[key]++;
 
-        console.log(`🔄 Usando chave ${nextIndex + 1} (${this.keyUsageCount[key]} usos)`);
+        console.log(`🔄 Usando chave ${GEMINI_API_KEYS.indexOf(key) + 1} (${this.keyUsageCount[key]} usos)`);
         
         // Adiciona delay proporcional ao uso da chave
         const baseDelay = 5000; // 5 segundos de base
@@ -370,6 +368,9 @@ export class MonitorService {
             const captchaText = result.response.text().trim();
             console.log('✅ Captcha resolvido:', captchaText);
 
+            // Atualiza a última chave usada apenas se deu certo
+            this.lastUsedKey = key;
+
             // Reset contador se sucesso
             if (this.keyUsageCount[key] > 10) {
                 this.keyUsageCount[key] = 0;
@@ -380,18 +381,22 @@ export class MonitorService {
         } catch (error: any) {
             console.error('❌ Erro ao resolver captcha:', error.message);
             
-            // Se for erro de limite, aumenta o delay na próxima vez
+            // Se for erro de limite, aumenta o delay na próxima vez e troca a chave
             if (error.message.includes('429') || error.message.includes('quota')) {
-                const key = this.lastUsedKey!;
                 this.keyUsageCount[key] += 5; // Aumenta o contador para forçar mais delay
-                const keyIndex = GEMINI_API_KEYS.indexOf(key) + 1;
-                console.log(`⚠️ Limite atingido na chave ${keyIndex}, aumentando delay`);
+                
+                // Troca para próxima chave
+                const currentIndex = GEMINI_API_KEYS.indexOf(key);
+                const nextIndex = (currentIndex + 1) % GEMINI_API_KEYS.length;
+                this.lastUsedKey = GEMINI_API_KEYS[nextIndex];
+                
+                console.log(`⚠️ Limite atingido na chave ${currentIndex + 1}, alternando para chave ${nextIndex + 1}`);
                 
                 // Notifica o admin
                 await notificationService.sendNotification(
                     `⚠️ *Alerta de API Key*\n\n` +
-                    `A chave API ${keyIndex} atingiu o limite de uso.\n` +
-                    `Aumentando delay e alternando para próxima chave...`
+                    `A chave API ${currentIndex + 1} atingiu o limite de uso.\n` +
+                    `Aumentando delay e alternando para chave ${nextIndex + 1}...`
                 );
             }
 
