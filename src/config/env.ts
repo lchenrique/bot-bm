@@ -11,7 +11,9 @@ const envSchema = z.object({
   MONITOR_PASSWORD: z.string(),
   BOT_PASSWORD: z.string(),
   GOOGLE_API_KEY: z.string(),
-  GOOGLE_API_KEY_BACKUP: z.string(),
+  GOOGLE_API_KEY_2: z.string(),
+  GOOGLE_API_KEY_3: z.string(),
+  GOOGLE_API_KEY_4: z.string(),
   DEEPSEEK_API_KEY: z.string(),
 });
 
@@ -27,6 +29,8 @@ export const env = {
     MONITOR_PASSWORD: process.env.MONITOR_PASSWORD!,
     BOT_PASSWORD: process.env.BOT_PASSWORD!,
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY!,
-    GOOGLE_API_KEY_BACKUP: process.env.GOOGLE_API_KEY_BACKUP!,
+    GOOGLE_API_KEY_2: process.env.GOOGLE_API_KEY_2!,
+    GOOGLE_API_KEY_3: process.env.GOOGLE_API_KEY_3!,
+    GOOGLE_API_KEY_4: process.env.GOOGLE_API_KEY_4!,
     DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY!
 };

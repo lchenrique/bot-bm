@@ -1,47 +1,47 @@
+export interface Status {
+    lastCheck: Date;
+    hasServices: boolean;
+    convenio: string;
+}
+
 export class StatusService {
-  private startTime: Date;
-  private totalChecks: number = 0;
-  private servicesFound: number = 0;
+    private _totalChecks = 0;
+    private _servicesFound = 0;
+    private _status: Status | null = null;
 
-  constructor() {
-    this.startTime = new Date();
-  }
+    incrementChecks() {
+        this._totalChecks++;
+    }
 
-  private formatDateBR(date: Date): string {
-    return date.toLocaleString('pt-BR', { 
-      timeZone: 'America/Sao_Paulo',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  }
+    incrementServicesFound() {
+        this._servicesFound++;
+    }
 
-  private formatUptime(seconds: number): string {
-    const days = Math.floor(seconds / (24 * 60 * 60));
-    const hours = Math.floor((seconds % (24 * 60 * 60)) / (60 * 60));
-    const minutes = Math.floor((seconds % (60 * 60)) / 60);
-    
-    return `${days}d ${hours}h ${minutes}m`;
-  }
+    setStatus(status: Status) {
+        this._status = status;
+    }
 
-  incrementChecks() {
-    this.totalChecks++;
-  }
+    getStatus(): string {
+        if (!this._status) {
+            return 'Nenhuma verificação realizada ainda.';
+        }
 
-  incrementServicesFound() {
-    this.servicesFound++;
-  }
+        const { lastCheck, hasServices, convenio } = this._status;
+        const formattedDate = lastCheck.toLocaleString('pt-BR', { 
+            timeZone: 'America/Sao_Paulo',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
 
-  getStatus(): string {
-    const uptime = (new Date().getTime() - this.startTime.getTime()) / 1000;
-    
-    return `📊 Status do Monitor\n\n` +
-           `🕒 Última verificação: ${this.formatDateBR(new Date())}\n` +
-           `⏱️ Uptime: ${this.formatUptime(uptime)}\n` +
-           `🔄 Total de verificações: ${this.totalChecks}\n` +
-           `✅ Serviços encontrados: ${this.servicesFound}`;
-  }
+        return `📊 Status do Monitoramento\n\n` +
+               `🔍 Total de verificações: ${this._totalChecks}\n` +
+               `✨ Serviços encontrados: ${this._servicesFound}\n` +
+               `⏰ Última verificação: ${formattedDate}\n` +
+               `📍 Último local: ${convenio === '16' ? 'Niterói' : 'Maricá'}\n` +
+               `${hasServices ? '🎉 Serviços disponíveis!' : '😕 Nenhum serviço disponível'}`;
+    }
 } 

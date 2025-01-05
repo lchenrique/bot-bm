@@ -34,7 +34,9 @@ function formatDateBR(date: Date): string {
 // Array de chaves do Gemini e controle de taxa
 const GEMINI_API_KEYS = [
     env.GOOGLE_API_KEY,
-    env.GOOGLE_API_KEY_BACKUP
+    env.GOOGLE_API_KEY_2,
+    env.GOOGLE_API_KEY_3,
+    env.GOOGLE_API_KEY_4
 ].filter(Boolean);
 
 let currentKeyIndex = 0;
@@ -118,13 +120,14 @@ export class MonitorService {
     private _currentConvenio: '16' | '18' = '16';
     private statusService: StatusService;
     private lastUsedKey: string | null = null;
-    private keyUsageCount: { [key: string]: number } = {
-        [env.GOOGLE_API_KEY]: 0,
-        [env.GOOGLE_API_KEY_BACKUP]: 0
-    };
+    private keyUsageCount: { [key: string]: number } = {};
 
     constructor() {
         this.statusService = new StatusService();
+        // Inicializa o contador para todas as chaves
+        GEMINI_API_KEYS.forEach(key => {
+            this.keyUsageCount[key] = 0;
+        });
     }
 
     async initialize() {
@@ -262,8 +265,8 @@ export class MonitorService {
             // Se não achou o link, verifica se tem mensagem de código incorreto
             const content = await this.page!.content();
             if (content.includes('Código incorreto')) {
-                console.log('⚠️ Código incorreto detectado, recarregando página...');
-                await this.page!.reload();
+                console.log('❌ Captcha incorreto, voltando...');
+                await this.page!.goBack();
                 await this.page!.waitForTimeout(1000);
                 return false;
             }
@@ -289,7 +292,9 @@ export class MonitorService {
                 console.log('❌ Login falhou, verificando erro...');
                 const newContent = await this.page!.content();
                 if (newContent.includes('Código incorreto')) {
-                    console.log('❌ Captcha incorreto');
+                    console.log('❌ Captcha incorreto, voltando...');
+                    await this.page!.goBack();
+                    await this.page!.waitForTimeout(1000);
                     return false;
                 }
                 throw new Error('Login falhou por motivo desconhecido');
@@ -321,21 +326,24 @@ export class MonitorService {
         console.log('📸 Capturando screenshot do captcha...');
         const imageBuffer = await captchaElement.screenshot();
         
-        // Escolhe a chave com menos uso
-        const key = this.lastUsedKey === env.GOOGLE_API_KEY ? 
-                   env.GOOGLE_API_KEY_BACKUP : 
-                   env.GOOGLE_API_KEY;
+        // Escolhe a próxima chave disponível
+        const currentIndex = GEMINI_API_KEYS.indexOf(this.lastUsedKey || GEMINI_API_KEYS[0]);
+        const nextIndex = (currentIndex + 1) % GEMINI_API_KEYS.length;
+        const key = GEMINI_API_KEYS[nextIndex];
         
         this.lastUsedKey = key;
         this.keyUsageCount[key]++;
 
-        console.log(`🔄 Usando chave ${key === env.GOOGLE_API_KEY ? '1' : '2'} (${this.keyUsageCount[key]} usos)`);
+        console.log(`🔄 Usando chave ${nextIndex + 1} (${this.keyUsageCount[key]} usos)`);
         
         // Adiciona delay proporcional ao uso da chave
-        const delay = Math.min(this.keyUsageCount[key] * 500, 5000);
-        if (delay > 0) {
-            console.log(`⏳ Aguardando ${delay}ms antes da próxima requisição...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+        const baseDelay = 5000; // 5 segundos de base
+        const usageDelay = this.keyUsageCount[key] * 1000; // +1 segundo por uso
+        const totalDelay = baseDelay + usageDelay;
+        
+        if (totalDelay > 0) {
+            console.log(`⏳ Aguardando ${totalDelay/1000} segundos antes da próxima requisição...`);
+            await new Promise(resolve => setTimeout(resolve, totalDelay));
         }
 
         try {
@@ -376,7 +384,15 @@ export class MonitorService {
             if (error.message.includes('429') || error.message.includes('quota')) {
                 const key = this.lastUsedKey!;
                 this.keyUsageCount[key] += 5; // Aumenta o contador para forçar mais delay
-                console.log(`⚠️ Limite atingido na chave ${key === env.GOOGLE_API_KEY ? '1' : '2'}, aumentando delay`);
+                const keyIndex = GEMINI_API_KEYS.indexOf(key) + 1;
+                console.log(`⚠️ Limite atingido na chave ${keyIndex}, aumentando delay`);
+                
+                // Notifica o admin
+                await notificationService.sendNotification(
+                    `⚠️ *Alerta de API Key*\n\n` +
+                    `A chave API ${keyIndex} atingiu o limite de uso.\n` +
+                    `Aumentando delay e alternando para próxima chave...`
+                );
             }
 
             throw error;
@@ -483,6 +499,75 @@ export class MonitorService {
 
     getStatus(): string {
         return this.statusService.getStatus();
+    }
+
+    private async monitor(): Promise<void> {
+        try {
+            // Alterna entre os convênios
+            this._currentConvenio = this._currentConvenio === '16' ? '18' : '16';
+            console.log(`🔄 Alternando para convênio ${this._currentConvenio}`);
+
+            // Aguarda um tempo proporcional ao uso da chave atual
+            const currentKey = this.lastUsedKey || GEMINI_API_KEYS[0];
+            const baseDelay = 5000; // 5 segundos de base
+            const usageDelay = this.keyUsageCount[currentKey] * 1000; // +1 segundo por uso
+            const totalDelay = baseDelay + usageDelay;
+            
+            console.log(`⏳ Aguardando ${totalDelay/1000} segundos antes da próxima verificação...`);
+            await new Promise(resolve => setTimeout(resolve, totalDelay));
+
+            // Navega para a página de serviços
+            await this.page!.goto(`${env.TARGET_URL}/index.php?option=com_servicos_vagos&Itemid=155`);
+            await this.page!.waitForTimeout(1000);
+
+            // Verifica se precisa fazer login
+            const needsLogin = await this.checkCookiesAndLogin();
+            if (needsLogin) {
+                console.log('🔐 Necessário fazer login...');
+                return;
+            }
+
+            // Seleciona o convênio
+            await this.page!.selectOption('select[name="convenio"]', this._currentConvenio);
+            await this.page!.click('input[type="submit"]');
+            await this.page!.waitForTimeout(1000);
+
+            // Verifica se há serviços disponíveis
+            const content = await this.page!.content();
+            if (content.includes('Não há serviços disponíveis')) {
+                console.log('😕 Nenhum serviço disponível');
+                this.statusService.setStatus({
+                    lastCheck: new Date(),
+                    hasServices: false,
+                    convenio: this._currentConvenio
+                });
+                return;
+            }
+
+            // Se chegou aqui, encontrou serviços!
+            console.log('🎉 Serviços encontrados!');
+            this.statusService.setStatus({
+                lastCheck: new Date(),
+                hasServices: true,
+                convenio: this._currentConvenio
+            });
+
+            // Captura screenshot da página
+            console.log('📸 Capturando screenshot...');
+            const screenshot = await this.page!.screenshot();
+
+            // Notifica sobre os serviços encontrados
+            await notificationService.sendNotification(
+                `🎉 *Serviços Encontrados!*\n\n` +
+                `Convênio: ${this._currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n` +
+                `Acesse: ${env.TARGET_URL}`,
+                screenshot
+            );
+
+        } catch (error) {
+            console.error('❌ Erro ao verificar serviços:', error);
+            throw error;
+        }
     }
 }
 
