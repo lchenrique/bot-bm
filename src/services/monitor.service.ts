@@ -133,17 +133,17 @@ export class MonitorService {
     async initialize() {
         try {
             this.browser = await chromium.launch({ 
-                headless: true,
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--single-process',
-                    '--disable-extensions'
-                ]
+                headless: false,
+                // args: [
+                //     '--no-sandbox',
+                //     '--disable-setuid-sandbox',
+                //     '--disable-dev-shm-usage',
+                //     '--disable-gpu',
+                //     '--no-first-run',
+                //     '--no-zygote',
+                //     '--single-process',
+                //     '--disable-extensions'
+                // ]
             });
             const context = await this.browser.newContext({
                 viewport: { width: 1280, height: 720 },
