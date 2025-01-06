@@ -20,6 +20,8 @@ function formatDateBR(date: Date): string {
 export class NotificationService {
   private bot: TelegramBot;
   private authorizedChats: Set<string>;
+  private lastPingTime: Date | null = null;
+  private serviceActive = true;
 
   constructor() {
     this.bot = new TelegramBot(env.TELEGRAM_BOT_TOKEN, { polling: true });
@@ -28,6 +30,142 @@ export class NotificationService {
     if (env.ADMIN_CHAT_ID_2) {
       this.authorizedChats.add(env.ADMIN_CHAT_ID_2);
     }
+    this.setupCommands();
+    this.startPingCheck();
+  }
+
+  private startPingCheck() {
+    setInterval(async () => {
+      try {
+        await this.bot.getMe();
+        this.lastPingTime = new Date();
+      } catch (error) {
+        console.error('Erro ao verificar status do bot:', error);
+      }
+    }, 5 * 60 * 1000);
+  }
+
+  private setupCommands() {
+    // Comando /menu - Mostra o menu de comandos
+    this.bot.onText(/\/menu/, async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!this.authorizedChats.has(chatId)) {
+        await this.bot.sendMessage(chatId, '⚠️ Você não está autorizado a usar este bot.');
+        return;
+      }
+
+      await this.bot.sendMessage(chatId, 
+        '📋 Menu de Comandos:\n\n' +
+        '📊 Status Inscrição - /status\n' +
+        '🔄 Status Monitoramento - /check\n' +
+        '🛠️ Debug - /debug',
+        {
+          reply_markup: {
+            keyboard: [
+              [{ text: '📊 Status Inscrição' }, { text: '📄 Status Monitoramento' }],
+              [{ text: '▶️ Iniciar Monitoramento' }, { text: '⏹️ Parar Monitoramento' }],
+              [{ text: '🛠️ Debug' }]
+            ],
+            resize_keyboard: true
+          }
+        }
+      );
+    });
+
+    // Comando /status - Status da inscrição
+    this.bot.onText(/\/status|📊 Status Inscrição/, async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!this.authorizedChats.has(chatId)) {
+        await this.bot.sendMessage(chatId, '⚠️ Você não está autorizado a usar este bot.');
+        return;
+      }
+
+      const botInfo = await this.bot.getMe();
+      await this.bot.sendMessage(chatId,
+        '📊 *Status do Bot*\n\n' +
+        `🤖 Bot: @${botInfo.username}\n` +
+        `🆔 Seu Chat ID: ${chatId}\n` +
+        `🕒 Última verificação: ${this.lastPingTime ? formatDateBR(this.lastPingTime) : 'Nunca'}`,
+        { parse_mode: 'Markdown' }
+      );
+    });
+
+    // Comando /check - Status do monitoramento
+    this.bot.onText(/\/check|📄 Status Monitoramento/, async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!this.authorizedChats.has(chatId)) {
+        await this.bot.sendMessage(chatId, '⚠️ Você não está autorizado a usar este bot.');
+        return;
+      }
+
+      await this.sendStatus('📊 Status do Monitoramento', chatId);
+    });
+
+    // Comando para iniciar monitoramento
+    this.bot.onText(/▶️ Iniciar Monitoramento/, async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!this.authorizedChats.has(chatId)) {
+        await this.bot.sendMessage(chatId, '⚠️ Você não está autorizado a usar este bot.');
+        return;
+      }
+
+      if (monitorService.isRunning) {
+        await this.bot.sendMessage(chatId, '⚠️ O monitoramento já está em execução!');
+        return;
+      }
+      await monitorService.initialize();
+      await monitorService.startMonitoring();
+      await this.bot.sendMessage(chatId, '▶️ Monitoramento iniciado com sucesso!');
+    });
+
+    // Comando para parar monitoramento
+    this.bot.onText(/⏹️ Parar Monitoramento/, async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!this.authorizedChats.has(chatId)) {
+        await this.bot.sendMessage(chatId, '⚠️ Você não está autorizado a usar este bot.');
+        return;
+      }
+
+      if (!monitorService.isRunning) {
+        await this.bot.sendMessage(chatId, '⚠️ O monitoramento já está parado!');
+        return;
+      }
+      await monitorService.stopMonitoring();
+      await this.bot.sendMessage(chatId, '⏹️ Monitoramento parado com sucesso!');
+    });
+
+    // Comando /debug - Informações de debug
+    this.bot.onText(/\/debug|🛠️ Debug/, async (msg) => {
+      const chatId = msg.chat.id.toString();
+      if (!this.authorizedChats.has(chatId)) {
+        await this.bot.sendMessage(chatId, '⚠️ Você não está autorizado a usar este bot.');
+        return;
+      }
+
+      await this.bot.sendMessage(chatId,
+        '🛠️ *Informações de Debug*\n\n' +
+        `🤖 Estado: ${monitorService.isRunning ? 'Rodando' : 'Parado'}\n` +
+        `🕒 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
+        `📍 Último local: ${monitorService.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n` +
+        `📡 Última conexão: ${this.lastPingTime ? formatDateBR(this.lastPingTime) : 'Nunca'}`,
+        { parse_mode: 'Markdown' }
+      );
+    });
+  }
+
+  private async sendStatus(status: string, chatId: string) {
+    if (!this.serviceActive) {
+        await this.bot.sendMessage(chatId, '⚠️ Serviço está temporariamente indisponível');
+        return;
+    }
+
+    const message = `📊 *Status do Monitoramento*\n\n` +
+                   `🤖 Estado: ${monitorService.isRunning ? 'Rodando' : 'Parado'}\n` +
+                   `🕒 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
+                   `📝 Último local: ${monitorService.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n\n` +
+                   `_O sistema verifica automaticamente tanto Niterói quanto Maricá._`;
+
+    await this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
   }
 
   // Notificação geral para todos os usuários autorizados
