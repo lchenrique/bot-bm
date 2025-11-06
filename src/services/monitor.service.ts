@@ -261,7 +261,7 @@ export class MonitorService {
             while (this.isRunning) {
                 try {
                     console.log('🔁 Nova iteração do loop de monitoramento');
-                    
+
                     if (!this.browser || !this.page) {
                         console.log('⚠️ Browser ou page não existe, reinicializando...');
                         if (!await this.retryOperation(
@@ -278,13 +278,13 @@ export class MonitorService {
                     console.log('🔐 Chamando checkCookiesAndLogin()...');
                     const loginResult = await this.checkCookiesAndLogin();
                     console.log('🔐 checkCookiesAndLogin() retornou:', loginResult);
-                    
+
                     if (!loginResult) {
                         console.log('❌ Login falhou, aguardando 5 segundos antes de tentar novamente...');
                         await new Promise(resolve => setTimeout(resolve, 5000));
                         continue;
                     }
-                    
+
                     console.log('✅ Login OK, prosseguindo com monitoramento...');
 
                     // Garante que estamos na página de serviços antes de cada verificação
