@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node-dev src/index.ts",
+    "postinstall": "npx playwright install --with-deps",
     "lint": "eslint . --ext .ts",
     "test": "jest"
   },
