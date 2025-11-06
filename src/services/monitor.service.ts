@@ -338,15 +338,8 @@ export class MonitorService {
         try {
             return await this.retryOperation(async () => {
                 console.log('🔄 Iniciando verificação de login...');
-                console.log('📍 URL atual:', this.page!.url());
-
-                // Adiciona timeout maior para carregamento (com try-catch para não travar)
-                try {
-                    await this.page!.waitForLoadState('domcontentloaded', { timeout: 10000 });
-                    console.log('✅ Página carregada (domcontentloaded)');
-                } catch (loadError) {
-                    console.warn('⚠️ Timeout ao aguardar carregamento, continuando mesmo assim...');
-                }
+                // Adiciona timeout maior para carregamento
+                await this.page!.waitForLoadState('networkidle', { timeout: 30000 });
 
                 // Log detalhado do conteúdo da página
                 console.log('📄 Conteúdo atual da página:', await this.page!.content());
