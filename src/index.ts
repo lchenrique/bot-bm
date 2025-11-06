@@ -1,12 +1,12 @@
-import fastify from 'fastify';
 import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
+import fastify from 'fastify';
 import { env } from './config/env';
-import { notificationService } from './services/notification.service';
 import { monitorService } from './services/monitor.service';
+import { notificationService } from './services/notification.service';
 
 function formatDateBR(date: Date): string {
-  return date.toLocaleString('pt-BR', { 
+  return date.toLocaleString('pt-BR', {
     timeZone: 'America/Sao_Paulo',
     day: '2-digit',
     month: '2-digit',
@@ -78,26 +78,26 @@ async function main() {
 
     server.get('/debug', async () => {
       return {
-          status: 'ok',
-          monitorRunning: monitorService.isRunning,
-          lastCheck: monitorService.lastCheck,
-          currentConvenio: monitorService.currentConvenio,
-          timestamp: formatDateBR(new Date())
+        status: 'ok',
+        monitorRunning: monitorService.isRunning,
+        lastCheck: monitorService.lastCheck,
+        currentConvenio: monitorService.currentConvenio,
+        timestamp: formatDateBR(new Date())
       };
-  });
+    });
 
 
     // Start the server FIRST para o Render detectar a porta
-    await server.listen({ 
-      port: Number(env.PORT), 
-      host: '0.0.0.0' 
+    await server.listen({
+      port: Number(env.PORT),
+      host: '0.0.0.0'
     });
-    
+
     console.log(`✅ Server listening on 0.0.0.0:${env.PORT}`);
 
     // Inicializa o bot e serviços em segundo plano
     console.log('Iniciando serviços em segundo plano...');
-    
+
     // Não aguarda a inicialização para não bloquear
     monitorService.initialize()
       .then(() => {
@@ -150,4 +150,3 @@ main().catch((error) => {
   process.exit(1);
 });
 
- 
