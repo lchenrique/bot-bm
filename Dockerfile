@@ -42,8 +42,19 @@ COPY . .
 # **Passo de Build (se estiver usando TypeScript)**
 RUN pnpm build
 
+# Copiar script de otimização
+COPY optimize-render.sh /app/
+RUN chmod +x /app/optimize-render.sh
+
+# Variáveis de ambiente para otimizar memória
+ENV NODE_OPTIONS="--max-old-space-size=384 --max-semi-space-size=32"
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 # Expondo a porta (se necessário)
 EXPOSE 3000
+
+# Usar script de otimização como entrypoint
+ENTRYPOINT ["/app/optimize-render.sh"]
 
 # Comando para rodar o app
 CMD ["pnpm", "start"]

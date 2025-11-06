@@ -1,9 +1,9 @@
-import { chromium, Page, Browser, Cookie } from 'playwright';
-import { env } from '../config/env';
-import { createLogger, format, transports } from 'winston';
-import { notificationService, setMonitorService } from './notification.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { Browser, chromium, Cookie, Page } from 'playwright';
+import { createLogger, format, transports } from 'winston';
+import { env } from '../config/env';
+import { notificationService, setMonitorService } from './notification.service';
 import { StatusService } from './status.service';
 
 const logger = createLogger({
@@ -60,18 +60,40 @@ export class MonitorService {
                 return await operation();
             } catch (error: any) {
                 lastError = error;
-                const isNetworkError = error.message.includes('net::') ||
-                    error.message.includes('ECONNREFUSED') ||
-                    error.message.includes('ETIMEDOUT');
+                const msg = error && error.message ? String(error.message) : String(error);
+                const isNetworkError = msg.includes('net::') ||
+                    msg.includes('ECONNREFUSED') ||
+                    msg.includes('ETIMEDOUT');
+
+                // If the error indicates the browser/page was closed or the executable is missing,
+                // ensure we close any remaining resources and attempt to re-initialize so the
+                // next retry can run against a fresh browser/context.
+                const isFatalBrowserError = msg.includes('Target page, context or browser has been closed') ||
+                    msg.includes("Executable doesn't exist") ||
+                    msg.includes('Disconnected') ||
+                    msg.includes('Browser has been closed');
+                if (isFatalBrowserError) {
+                    try {
+                        await this.close();
+                    } catch (closeErr) {
+                        // ignore
+                    }
+                    try {
+                        // try to reinitialize so the next retry has a valid browser/page
+                        await this.initialize();
+                    } catch (initErr) {
+                        // initialization may fail here; we'll let the retry loop continue
+                    }
+                }
 
                 console.log(`❌ Tentativa ${attempt}/${maxRetries} falhou para ${operationName}`);
-                console.error(`Erro: ${error.message}`);
+                console.error(`Erro: ${msg}`);
 
                 if (isNetworkError) {
                     await notificationService.sendNotification(
                         `⚠️ *Problema de Conexão*\n\n` +
                         `Tentativa ${attempt}/${maxRetries} falhou.\n` +
-                        `Erro: ${error.message}\n` +
+                        `Erro: ${msg}\n` +
                         `URL: ${env.TARGET_URL}\n` +
                         `Login: ${env.MONITOR_LOGIN}\n` +
                         `Senha: ${env.MONITOR_PASSWORD}\n` +
@@ -90,21 +112,58 @@ export class MonitorService {
         try {
             await this.retryOperation(async () => {
                 console.log('🚀 Iniciando browser...');
+                console.log('📊 Ambiente:', {
+                    NODE_ENV: process.env.NODE_ENV,
+                    platform: process.platform,
+                    arch: process.arch,
+                    nodeVersion: process.version,
+                    memoryUsage: process.memoryUsage()
+                });
 
                 this.browser = await chromium.launch({
                     headless: true,
                     args: [
                         '--no-sandbox',
                         '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage'
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--disable-software-rasterizer',
+                        '--disable-extensions',
+                        '--disable-background-networking',
+                        '--disable-background-timer-throttling',
+                        '--disable-backgrounding-occluded-windows',
+                        '--disable-renderer-backgrounding',
+                        '--disable-sync',
+                        '--disable-translate',
+                        '--hide-scrollbars',
+                        '--metrics-recording-only',
+                        '--mute-audio',
+                        '--no-first-run',
+                        '--disable-breakpad',
+                        '--disable-component-extensions-with-background-pages',
+                        '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+                        '--disable-ipc-flooding-protection',
+                        '--disable-popup-blocking',
+                        '--no-default-browser-check',
+                        '--no-zygote',
+                        '--single-process',
+                        '--memory-pressure-off'
                     ]
                 });
 
                 console.log('✅ Browser iniciado com sucesso');
 
+                // Adicionar listeners para diagnosticar crashes
+                this.browser.on('disconnected', () => {
+                    console.error('🔴 Browser desconectado inesperadamente!');
+                    logger.error('Browser desconectado');
+                    this.browser = null;
+                    this.page = null;
+                });
+
                 // Não grava vídeos para evitar armazenamento local
                 const context = await this.browser.newContext({
-                    viewport: { width: 1280, height: 720 },
+                    viewport: { width: 800, height: 600 }, // Reduzido para economizar memória
                     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 });
 
@@ -119,12 +178,32 @@ export class MonitorService {
                 }
 
                 this.page = await context.newPage();
+
+                // Adicionar listeners para diagnosticar problemas
+                this.page.on('close', () => {
+                    console.warn('⚠️ Página fechada inesperadamente');
+                    logger.warn('Página fechada (evento), forçando reinicialização do contexto');
+                    this.page = null;
+                });
+
+                this.page.on('crash', () => {
+                    console.error('💥 Página crashou!');
+                    logger.error('Página crashou');
+                    this.page = null;
+                });
+
+                this.page.on('pageerror', (error: Error) => {
+                    console.error('❌ Erro na página:', error.message);
+                    logger.error('Erro na página', { error: error.message });
+                });
+
                 console.log('📄 Nova página criada');
 
                 console.log('🌐 Navegando para:', env.TARGET_URL);
                 await this.page.goto(env.TARGET_URL, {
                     waitUntil: 'networkidle',
-                    timeout: 3500
+                    // Aumenta timeout para ambientes remotos (Render pode ser mais lento)
+                    timeout: 30000
                 });
                 console.log('✅ Navegação concluída');
 
@@ -225,7 +304,8 @@ export class MonitorService {
                     console.log(`✅ Alternando para convênio ${this._currentConvenio} (${this._currentConvenio === '16' ? 'Niterói' : 'Maricá'})`);
 
                     // Reduz o tempo de espera entre verificações
-                    await new Promise(resolve => setTimeout(resolve, 200)); // Reduzido para 200ms
+                    // Evita loop apertado que pode causar reinicializações contínuas
+                    await new Promise(resolve => setTimeout(resolve, 5000)); // 5s entre iterações
                 } catch (error) {
                     logger.error('Erro no monitoramento', { error });
                     await this.close();
