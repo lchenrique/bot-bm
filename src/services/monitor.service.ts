@@ -111,8 +111,8 @@ export class MonitorService {
     async initialize() {
         try {
             await this.retryOperation(async () => {
-                console.log('🚀 Iniciando browser...');
-                console.log('📊 Ambiente:', {
+                console.log('🚀 [init] Iniciando browser...');
+                console.log('📊 [init] Ambiente:', {
                     NODE_ENV: process.env.NODE_ENV,
                     platform: process.platform,
                     arch: process.arch,
@@ -120,6 +120,7 @@ export class MonitorService {
                     memoryUsage: process.memoryUsage()
                 });
 
+                console.log('⏳ [init] chromium.launch...');
                 this.browser = await chromium.launch({
                     headless: true,
                     args: [
@@ -150,8 +151,7 @@ export class MonitorService {
                         '--memory-pressure-off'
                     ]
                 });
-
-                console.log('✅ Browser iniciado com sucesso');
+                console.log('✅ [init] Browser iniciado com sucesso');
 
                 // Adicionar listeners para diagnosticar crashes
                 this.browser.on('disconnected', () => {
@@ -161,23 +161,25 @@ export class MonitorService {
                     this.page = null;
                 });
 
-                // Não grava vídeos para evitar armazenamento local
+                console.log('⏳ [init] browser.newContext...');
                 const context = await this.browser.newContext({
                     viewport: { width: 800, height: 600 }, // Reduzido para economizar memória
                     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 });
+                console.log('✅ [init] Contexto do browser criado');
 
-                console.log('✅ Contexto do browser criado');
-
+                console.log('⏳ [init] Carregando cookies...');
                 const cookies = await this.loadCookies();
                 if (cookies) {
-                    console.log('🍪 Cookies encontrados, adicionando ao contexto');
+                    console.log('🍪 [init] Cookies encontrados, adicionando ao contexto');
                     await context.addCookies(cookies);
                 } else {
-                    console.log('⚠️ Nenhum cookie encontrado');
+                    console.log('⚠️ [init] Nenhum cookie encontrado');
                 }
 
+                console.log('⏳ [init] context.newPage...');
                 this.page = await context.newPage();
+                console.log('✅ [init] Nova página criada');
 
                 // Adicionar listeners para diagnosticar problemas
                 this.page.on('close', () => {
@@ -197,18 +199,16 @@ export class MonitorService {
                     logger.error('Erro na página', { error: error.message });
                 });
 
-                console.log('📄 Nova página criada');
-
-                console.log('🌐 Navegando para:', env.TARGET_URL);
+                console.log('🌐 [init] Navegando para:', env.TARGET_URL);
                 await this.page.goto(env.TARGET_URL, {
                     waitUntil: 'networkidle',
-                    // Aumenta timeout para ambientes remotos (Render pode ser mais lento)
                     timeout: 30000
                 });
-                console.log('✅ Navegação concluída');
+                console.log('✅ [init] Navegação concluída');
 
-                console.log('📍 Status da página:', this.page!.url());
-                console.log('📄 Conteúdo:', await this.page!.content());
+                console.log('📍 [init] Status da página:', this.page!.url());
+                // Não logar o conteúdo inteiro para não poluir logs
+                // console.log('📄 Conteúdo:', await this.page!.content());
 
             }, 3, 10000, 'inicialização do navegador');
 
