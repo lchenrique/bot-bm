@@ -87,22 +87,29 @@ async function main() {
   });
 
 
-    // Inicializa o bot e serviços ANTES de iniciar o servidor
-    console.log('Iniciando serviços...');
-    await monitorService.initialize();
-    console.log('Serviços inicializados com sucesso');
-
-    // Start the server
+    // Start the server FIRST para o Render detectar a porta
     await server.listen({ 
       port: Number(env.PORT), 
       host: '0.0.0.0' 
     });
     
-    console.log(`Server listening on 0.0.0.0:${env.PORT}`);
+    console.log(`✅ Server listening on 0.0.0.0:${env.PORT}`);
 
-    // Inicia o monitoramento DEPOIS que o servidor estiver rodando
-    await monitorService.startMonitoring();
-    console.log('Monitoramento iniciado com sucesso');
+    // Inicializa o bot e serviços em segundo plano
+    console.log('Iniciando serviços em segundo plano...');
+    
+    // Não aguarda a inicialização para não bloquear
+    monitorService.initialize()
+      .then(() => {
+        console.log('✅ Serviços inicializados com sucesso');
+        return monitorService.startMonitoring();
+      })
+      .then(() => {
+        console.log('✅ Monitoramento iniciado com sucesso');
+      })
+      .catch((error) => {
+        console.error('❌ Erro ao inicializar serviços:', error);
+      });
 
     // Tratamento de sinais
     const shutdown = async (signal: string) => {
