@@ -128,27 +128,7 @@ export class MonitorService {
                         '--disable-setuid-sandbox',
                         '--disable-dev-shm-usage',
                         '--disable-gpu',
-                        '--disable-software-rasterizer',
-                        '--disable-extensions',
-                        '--disable-background-networking',
-                        '--disable-background-timer-throttling',
-                        '--disable-backgrounding-occluded-windows',
-                        '--disable-renderer-backgrounding',
-                        '--disable-sync',
-                        '--disable-translate',
-                        '--hide-scrollbars',
-                        '--metrics-recording-only',
-                        '--mute-audio',
-                        '--no-first-run',
-                        '--disable-breakpad',
-                        '--disable-component-extensions-with-background-pages',
-                        '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-                        '--disable-ipc-flooding-protection',
-                        '--disable-popup-blocking',
-                        '--no-default-browser-check',
-                        '--no-zygote',
-                        '--single-process',
-                        '--memory-pressure-off'
+                        '--disable-software-rasterizer'
                     ]
                 });
                 console.log('✅ [init] Browser iniciado com sucesso');
@@ -177,26 +157,44 @@ export class MonitorService {
                     console.log('⚠️ [init] Nenhum cookie encontrado');
                 }
 
+
                 console.log('⏳ [init] context.newPage...');
                 this.page = await context.newPage();
                 console.log('✅ [init] Nova página criada');
 
-                // Adicionar listeners para diagnosticar problemas
+                // Listeners detalhados para diagnóstico Render
                 this.page.on('close', () => {
-                    console.warn('⚠️ Página fechada inesperadamente');
+                    console.warn('⚠️ [init] Página fechada inesperadamente');
                     logger.warn('Página fechada (evento), forçando reinicialização do contexto');
                     this.page = null;
                 });
 
                 this.page.on('crash', () => {
-                    console.error('💥 Página crashou!');
+                    console.error('💥 [init] Página crashou!');
                     logger.error('Página crashou');
                     this.page = null;
                 });
 
                 this.page.on('pageerror', (error: Error) => {
-                    console.error('❌ Erro na página:', error.message);
+                    console.error('❌ [init] Erro na página:', error.message);
                     logger.error('Erro na página', { error: error.message });
+                });
+
+                this.page.on('requestfailed', request => {
+                    console.error('❌ [init] Request falhou:', request.url(), request.failure());
+                });
+
+                this.page.on('response', response => {
+                    if (!response.ok()) {
+                        console.warn('⚠️ [init] Response não OK:', response.url(), response.status());
+                    }
+                });
+
+                this.browser.on('disconnected', () => {
+                    console.error('🔴 [init] Browser desconectado inesperadamente!');
+                    logger.error('Browser desconectado');
+                    this.browser = null;
+                    this.page = null;
                 });
 
                 console.log('🌐 [init] Navegando para:', env.TARGET_URL);
