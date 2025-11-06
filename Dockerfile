@@ -1,48 +1,49 @@
-FROM mcr.microsoft.com/playwright:v1.40.0-focal
+# Usa a imagem base do Playwright
+FROM mcr.microsoft.com/playwright:v1.50.1-jammy
 
-WORKDIR /app
-
-# Instalar dependências do sistema
-RUN apt-get update && \
-    apt-get install -y \
+# Atualiza pacotes do sistema e instala dependências necessárias
+RUN apt-get update && apt-get install -y \
     libgbm-dev \
     libwoff1 \
     libopus0 \
-    libwebp6 \
-    libwebpdemux2 \
-    libenchant1c2a \
-    libgudev-1.0-0 \
-    libsecret-1-0 \
-    libhyphen0 \
+    libwebp-dev \
+    libharfbuzz-dev \
     libgdk-pixbuf2.0-0 \
-    libegl1 \
-    libnotify4 \
-    libxslt1.1 \
-    libxcomposite1 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libepoxy0 \
-    libgtk-3-0 \
-    libgbm1 \
-    libnss3 \
+    libenchant-2-2 \
     libxss1 \
-    libasound2
+    libasound2 \
+    libxtst6 \
+    libegl1 \
+    fonts-ipafont-gothic \
+    fonts-wqy-zenhei \
+    fonts-thai-tlwg \
+    fonts-kacst \
+    fonts-freefont-ttf \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copiar arquivos do projeto
+# Instala o pnpm
+RUN curl -fsSL https://get.pnpm.io/install.sh | bash
+ENV PATH="/root/.local/share/pnpm:${PATH}"
+
+# Define o diretório de trabalho
+WORKDIR /app
+
+# Copia arquivos de dependências primeiro para otimizar cache
 COPY package*.json ./
+COPY pnpm-lock.yaml ./
+
+# Instala dependências
+RUN pnpm install
+
+# Copia o código do projeto
 COPY . .
 
-# Instalar dependências do Node.js
-RUN npm install
+# **Passo de Build (se estiver usando TypeScript)**
+RUN pnpm build
 
-# Instalar browsers do Playwright
-RUN npx playwright install chromium
+# Expondo a porta (se necessário)
+EXPOSE 3000
 
-# Compilar TypeScript
-RUN npm run build
-
-# Expor porta
-EXPOSE 8080
-
-# Comando para iniciar
-CMD ["npm", "start"] 
+# Comando para rodar o app
+CMD ["pnpm", "start"]

@@ -1,9 +1,26 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { env } from '../config/env';
-import { monitorService } from './monitor.service';
 import fs from 'fs';
 import path from 'path';
 import pino from 'pino';
+
+// Interface para o MonitorService
+interface IMonitorService {
+  isRunning: boolean;
+  lastCheck: string | null;
+  currentConvenio: '16' | '18';
+  initialize(): Promise<boolean>;
+  startMonitoring(): Promise<void>;
+  stopMonitoring(): Promise<void>;
+}
+
+// Variável para armazenar a referência do MonitorService
+let monitorServiceRef: IMonitorService;
+
+// Função para configurar a referência
+export function setMonitorService(service: IMonitorService) {
+  monitorServiceRef = service;
+}
 
 function formatDateBR(date: Date): string {
   return date.toLocaleString('pt-BR', { 
@@ -109,12 +126,12 @@ export class NotificationService {
         return;
       }
 
-      if (monitorService.isRunning) {
+      if (monitorServiceRef.isRunning) {
         await this.bot.sendMessage(chatId, '⚠️ O monitoramento já está em execução!');
         return;
       }
-      await monitorService.initialize();
-      await monitorService.startMonitoring();
+      await monitorServiceRef.initialize();
+      await monitorServiceRef.startMonitoring();
       await this.bot.sendMessage(chatId, '▶️ Monitoramento iniciado com sucesso!');
     });
 
@@ -126,11 +143,11 @@ export class NotificationService {
         return;
       }
 
-      if (!monitorService.isRunning) {
+      if (!monitorServiceRef.isRunning) {
         await this.bot.sendMessage(chatId, '⚠️ O monitoramento já está parado!');
         return;
       }
-      await monitorService.stopMonitoring();
+      await monitorServiceRef.stopMonitoring();
       await this.bot.sendMessage(chatId, '⏹️ Monitoramento parado com sucesso!');
     });
 
@@ -144,9 +161,9 @@ export class NotificationService {
 
       await this.bot.sendMessage(chatId,
         '🛠️ *Informações de Debug*\n\n' +
-        `🤖 Estado: ${monitorService.isRunning ? 'Rodando' : 'Parado'}\n` +
-        `🕒 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
-        `📍 Último local: ${monitorService.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n` +
+        `🤖 Estado: ${monitorServiceRef.isRunning ? 'Rodando' : 'Parado'}\n` +
+        `🕒 Última verificação: ${monitorServiceRef.lastCheck || 'Nunca'}\n` +
+        `📍 Último local: ${monitorServiceRef.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n` +
         `📡 Última conexão: ${this.lastPingTime ? formatDateBR(this.lastPingTime) : 'Nunca'}`,
         { parse_mode: 'Markdown' }
       );
@@ -160,9 +177,9 @@ export class NotificationService {
     }
 
     const message = `📊 *Status do Monitoramento*\n\n` +
-                   `🤖 Estado: ${monitorService.isRunning ? 'Rodando' : 'Parado'}\n` +
-                   `🕒 Última verificação: ${monitorService.lastCheck || 'Nunca'}\n` +
-                   `📝 Último local: ${monitorService.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n\n` +
+                   `🤖 Estado: ${monitorServiceRef.isRunning ? 'Rodando' : 'Parado'}\n` +
+                   `🕒 Última verificação: ${monitorServiceRef.lastCheck || 'Nunca'}\n` +
+                   `📝 Último local: ${monitorServiceRef.currentConvenio === '16' ? 'Niterói' : 'Maricá'}\n\n` +
                    `_O sistema verifica automaticamente tanto Niterói quanto Maricá._`;
 
     await this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
@@ -171,22 +188,27 @@ export class NotificationService {
   // Notificação geral para todos os usuários autorizados
   async sendNotification(message: string, image?: Buffer) {
     try {
-      for (const chatId of this.authorizedChats) {
-        try {
-          if (image) {
-            await this.bot.sendPhoto(chatId, image, {
-              caption: message,
-              parse_mode: 'Markdown'
-            });
-          } else {
-            await this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-          }
-        } catch (error) {
-          console.error(`Erro ao enviar notificação para ${chatId}:`, error);
+      if (image) {
+        await this.bot.sendPhoto(env.ADMIN_CHAT_ID, image, {
+          caption: message,
+          parse_mode: 'Markdown'
+        });
+
+        // Envia também para ADMIN_CHAT_ID_2 se existir
+        if (env.ADMIN_CHAT_ID_2) {
+          await this.bot.sendPhoto(env.ADMIN_CHAT_ID_2, image, {
+            caption: message,
+            parse_mode: 'Markdown'
+          });
+        }
+      } else {
+        await this.bot.sendMessage(env.ADMIN_CHAT_ID, message, { parse_mode: 'Markdown' });
+        if (env.ADMIN_CHAT_ID_2) {
+          await this.bot.sendMessage(env.ADMIN_CHAT_ID_2, message, { parse_mode: 'Markdown' });
         }
       }
     } catch (error) {
-      console.error('Erro ao enviar notificações:', error);
+      console.error('Erro ao enviar notificação:', error);
     }
   }
 

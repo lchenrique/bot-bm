@@ -4,8 +4,6 @@ import swagger from '@fastify/swagger';
 import { env } from './config/env';
 import { notificationService } from './services/notification.service';
 import { monitorService } from './services/monitor.service';
-import path from 'path';
-import fs from 'fs';
 
 function formatDateBR(date: Date): string {
   return date.toLocaleString('pt-BR', { 
@@ -68,125 +66,6 @@ async function main() {
       }
     });
 
-    // Serve a página de teste
-    server.get('/test-page', async (request, reply) => {
-      const filePath = path.join(process.cwd(), 'public', 'test-page.html');
-      const content = fs.readFileSync(filePath, 'utf-8');
-      reply.type('text/html').send(content);
-    });
-
-    // Rota para simular uma mudança na página
-    server.get('/simulate-change', async () => {
-      const filePath = path.join(process.cwd(), 'public', 'test-page.html');
-      const currentTime = formatDateBR(new Date());
-      const newContent = `<!DOCTYPE html>
-<html>
-<head>
-    <title>Monitor de Oportunidades</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        :root {
-            --primary-color: #2196F3;
-            --background-color: #f5f5f5;
-            --text-color: #333;
-            --alert-color: #4CAF50;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 20px;
-            background-color: var(--background-color);
-            color: var(--text-color);
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        h1 {
-            color: var(--primary-color);
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 2.5em;
-            border-bottom: 2px solid var(--primary-color);
-            padding-bottom: 10px;
-        }
-
-        #content {
-            padding: 20px;
-            border-radius: 8px;
-            background-color: rgba(33, 150, 243, 0.05);
-        }
-
-        .update-alert {
-            background-color: var(--alert-color);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            display: inline-block;
-            margin-bottom: 15px;
-            font-weight: bold;
-        }
-
-        .job-details {
-            background: white;
-            padding: 15px;
-            border-radius: 5px;
-            border-left: 4px solid var(--primary-color);
-            margin: 15px 0;
-        }
-
-        .timestamp {
-            color: #666;
-            font-size: 0.9em;
-            margin-top: 20px;
-            text-align: right;
-            font-style: italic;
-        }
-
-        @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-            .container {
-                padding: 15px;
-            }
-            h1 {
-                font-size: 2em;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Monitor de Oportunidades</h1>
-        <div id="content">
-            <div class="update-alert">
-                🔥 NOVA OPORTUNIDADE DISPONÍVEL!
-            </div>
-            <div class="job-details">
-                <h3>Serviço Encontrado</h3>
-                <p>Uma nova oportunidade de trabalho está disponível para você!</p>
-                <p>Acesse agora para não perder essa chance.</p>
-            </div>
-            <p class="timestamp">Publicado em: <span id="timestamp">${currentTime}</span></p>
-        </div>
-    </div>
-</body>
-</html>`;
-
-      fs.writeFileSync(filePath, newContent);
-      return { status: 'changed', timestamp: currentTime };
-    });
-
     // Rota para verificar status do monitoramento
     server.get('/monitor-status', async () => {
       return {
@@ -196,6 +75,17 @@ async function main() {
         currentConvenio: monitorService.currentConvenio
       };
     });
+
+    server.get('/debug', async () => {
+      return {
+          status: 'ok',
+          monitorRunning: monitorService.isRunning,
+          lastCheck: monitorService.lastCheck,
+          currentConvenio: monitorService.currentConvenio,
+          timestamp: formatDateBR(new Date())
+      };
+  });
+
 
     // Inicializa o bot e serviços ANTES de iniciar o servidor
     console.log('Iniciando serviços...');
@@ -252,3 +142,5 @@ main().catch((error) => {
   console.error('Erro fatal:', error);
   process.exit(1);
 });
+
+ 

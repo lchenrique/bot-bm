@@ -12,6 +12,8 @@ build/
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
 
 # Logs
 logs/
@@ -31,4 +33,11 @@ cookies.json
 Thumbs.db
 
 # Fly.io
-.fly/ 
+.fly/
+
+# Coverage
+coverage/
+
+# Additional rules
+*.pem
+pnpm-debug.log* 

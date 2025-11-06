@@ -1,34 +1,59 @@
-# Dependencies
-node_modules/
+# Dependências
+node_modules
 npm-debug.log
 yarn-debug.log
 yarn-error.log
+pnpm-debug.log
 
-# Build
-dist/
-build/
+# Arquivos de build
+dist
+build
+.next
+.nuxt
+.cache
 
-# Environment
+# Arquivos de ambiente
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
-# Logs
-logs/
-*.log
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
 
-# Runtime data
-cookies.json
-
-# IDE
-.idea/
-.vscode/
+# Arquivos de IDE
+.idea
+.vscode
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
+# Logs
+logs
+*.log
+
+# Arquivos de teste
+coverage
+.nyc_output
+test
+tests
+__tests__
+*.test.ts
+*.spec.ts
+
+# Git
+.git
+.gitignore
+
+# Outros
+README.md
+LICENSE
+*.md
+.editorconfig
+.prettierrc
+.eslintrc
+.eslintignore
+jest.config.js
+tsconfig.tsbuildinfo
 
 # Fly.io
 .fly/

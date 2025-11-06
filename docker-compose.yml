@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  bot-bm:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: bot-bm
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DEBUG=playwright:*
+      - PORT=3000
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
+      - ADMIN_CHAT_ID_2=${ADMIN_CHAT_ID_2}
+      - TARGET_URL=${TARGET_URL}
+      - MONITOR_LOGIN=${MONITOR_LOGIN}
+      - MONITOR_PASSWORD=${MONITOR_PASSWORD}
+      - BOT_PASSWORD=${BOT_PASSWORD}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_API_KEY_2=${GOOGLE_API_KEY_2}
+      - GOOGLE_API_KEY_3=${GOOGLE_API_KEY_3}
+      - GOOGLE_API_KEY_4=${GOOGLE_API_KEY_4}
+      - GOOGLE_API_KEY_5=${GOOGLE_API_KEY_5}
+      - GOOGLE_API_KEY_6=${GOOGLE_API_KEY_6}
+      - GOOGLE_API_KEY_7=${GOOGLE_API_KEY_7}
+      - GOOGLE_API_KEY_8=${GOOGLE_API_KEY_8}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - CAPTCHA_SERVICE_URL=${CAPTCHA_SERVICE_URL}
+    volumes:
+      - ./logs:/app/logs:rw
+      - ./videos:/app/videos:rw
+      - ./data:/app/data:rw
+    networks:
+      - backend_default
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+          cpus: '2'
+        reservations:
+          memory: 1G
+          cpus: '1'
+
+networks:
+  backend_default:
+    external: true
