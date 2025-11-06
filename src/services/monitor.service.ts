@@ -248,17 +248,22 @@ export class MonitorService {
     }
 
     async startMonitoring() {
+        console.log('🚀 startMonitoring() foi chamado!');
         if (this.isRunning) {
             logger.warn('Monitoramento já está em execução');
             return;
         }
 
         this._isRunning = true;
+        console.log('🔄 Iniciando loop de monitoramento...');
 
         try {
             while (this.isRunning) {
                 try {
+                    console.log('🔁 Nova iteração do loop de monitoramento');
+                    
                     if (!this.browser || !this.page) {
+                        console.log('⚠️ Browser ou page não existe, reinicializando...');
                         if (!await this.retryOperation(
                             () => this.initialize(),
                             5,
@@ -270,10 +275,17 @@ export class MonitorService {
                     }
 
                     // Verifica cookies e faz login se necessário
-                    if (!await this.checkCookiesAndLogin()) {
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    console.log('🔐 Chamando checkCookiesAndLogin()...');
+                    const loginResult = await this.checkCookiesAndLogin();
+                    console.log('🔐 checkCookiesAndLogin() retornou:', loginResult);
+                    
+                    if (!loginResult) {
+                        console.log('❌ Login falhou, aguardando 5 segundos antes de tentar novamente...');
+                        await new Promise(resolve => setTimeout(resolve, 5000));
                         continue;
                     }
+                    
+                    console.log('✅ Login OK, prosseguindo com monitoramento...');
 
                     // Garante que estamos na página de serviços antes de cada verificação
                     await this.navigateToServices();
@@ -326,9 +338,15 @@ export class MonitorService {
         try {
             return await this.retryOperation(async () => {
                 console.log('🔄 Iniciando verificação de login...');
+                console.log('📍 URL atual:', this.page!.url());
 
-                // Adiciona timeout maior para carregamento
-                await this.page!.waitForLoadState('networkidle', { timeout: 30000 });
+                // Adiciona timeout maior para carregamento (com try-catch para não travar)
+                try {
+                    await this.page!.waitForLoadState('domcontentloaded', { timeout: 10000 });
+                    console.log('✅ Página carregada (domcontentloaded)');
+                } catch (loadError) {
+                    console.warn('⚠️ Timeout ao aguardar carregamento, continuando mesmo assim...');
+                }
 
                 // Log detalhado do conteúdo da página
                 console.log('📄 Conteúdo atual da página:', await this.page!.content());
